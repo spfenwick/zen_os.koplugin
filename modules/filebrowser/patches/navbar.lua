@@ -2577,21 +2577,6 @@ local function apply_navbar()
         end
     end
 
-    -- === Physical Home button: return to the default navbar tab ===
-
-    local orig_onHome = FileManager.onHome
-
-    function FileManager:onHome()
-        if is_navbar_enabled() then
-            utils.closeWidgetsAbove(self)
-            open_default_tab()
-            return true
-        end
-        if orig_onHome then
-            return orig_onHome(self)
-        end
-    end
-
     -- Inject navbar into FM after all plugins finish init.
 
     FileManager.onSetRotationMode = (function(original)
@@ -3404,16 +3389,6 @@ local function apply_navbar()
                 if m.close_callback then m.close_callback()
                 elseif m.onClose then m:onClose()
                 else UIManager:close(m) end
-                return true
-            end
-
-            -- Physical Home button: close this standalone view and return to
-            -- the default navbar tab, same as pressing Home from the main FM.
-            menu.key_events.Home = { { "Home" } }
-            function menu:onHome()
-                _navbar_focused_idx = nil
-                closeStandaloneView(self)
-                open_default_tab()
                 return true
             end
         end

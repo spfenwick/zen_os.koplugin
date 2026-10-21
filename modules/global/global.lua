@@ -132,11 +132,6 @@ function M.init(logger, plugin)
         run_patch(logger, plugin, "kindle_wakeup_recovery", kindle_wakeup_recovery_fn)
     end
 
-    local cloud_storage_home_fn = load_patch("cloud_storage_home")
-    if cloud_storage_home_fn then
-        run_patch(logger, plugin, "cloud_storage_home", cloud_storage_home_fn)
-    end
-
     local kindle_network_profile_guard_fn = load_patch("kindle_network_profile_guard")
     if kindle_network_profile_guard_fn then
         run_patch(logger, plugin, "kindle_network_profile_guard", kindle_network_profile_guard_fn)
