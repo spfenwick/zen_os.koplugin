@@ -10,6 +10,7 @@ describe("file browser item-table cache", function()
     local history_times
     local descendant_times
     local source_items
+    local source_readable
     local directory_mtime
     local directory_entries
     local directory_mtimes
@@ -63,7 +64,8 @@ describe("file browser item-table cache", function()
             end,
             genItemTableFromPath = function(_self, path)
                 generated[path] = (generated[path] or 0) + 1
-                return source_items[path] or { { path = path } }
+                -- KOReader 2026.10+ returns `readable`; nil mimics older versions.
+                return source_items[path] or { { path = path } }, source_readable[path]
             end,
         }
     end
@@ -92,6 +94,7 @@ describe("file browser item-table cache", function()
         history_times = {}
         descendant_times = {}
         source_items = {}
+        source_readable = {}
         directory_mtime = 1
         directory_entries = {}
         directory_mtimes = {}
@@ -752,5 +755,70 @@ describe("file browser item-table cache", function()
 
         assert.is_nil(persisted_store.flushed)
         assert.are.same({ removed = true }, persisted_store.data)
+    end)
+
+    it("reports cached and synthetic listings as readable", function()
+        source_readable["/library"] = true
+        local chooser = setmetatable({ name = "filemanager" }, { __index = FileChooser })
+
+        local _, miss_readable = chooser:genItemTableFromPath("/library")
+        assert.is_true(miss_readable)
+        assert.are.equal("miss", chooser._zen_last_item_table_cache_result.cache)
+
+        local _, hit_readable = chooser:genItemTableFromPath("/library")
+        assert.is_true(hit_readable)
+        assert.are.equal("memory_hit", chooser._zen_last_item_table_cache_result.cache)
+        assert.are.equal(1, generated["/library"])
+
+        local warmed = chooser:_zen_warm_item_table("/library")
+        assert.is_true(chooser:_zen_prepare_item_table("/library", warmed))
+        local _, prepared_readable = chooser:genItemTableFromPath("/library")
+        assert.is_true(prepared_readable)
+        assert.are.equal("prepared", chooser._zen_last_item_table_cache_result.cache)
+
+        run_scheduled()
+        local restored_chooser = apply_new_filechooser()
+        local _, disk_readable = restored_chooser:genItemTableFromPath("/library")
+        assert.is_true(disk_readable)
+        assert.are.equal("disk_hit", restored_chooser._zen_last_item_table_cache_result.cache)
+
+        _G.__ZEN_UI_DEFER_FILEMANAGER_LISTING = { path = "/library/other" }
+        local _, deferred_readable = restored_chooser:genItemTableFromPath("/library/other")
+        assert.is_true(deferred_readable)
+        assert.are.equal("deferred", restored_chooser._zen_last_item_table_cache_result.cache)
+    end)
+
+    it("reports cached listings as readable when KOReader returns no flag", function()
+        local chooser = setmetatable({ name = "filemanager" }, { __index = FileChooser })
+
+        local _, miss_readable = chooser:genItemTableFromPath("/library")
+        assert.is_nil(miss_readable)
+        local _, hit_readable = chooser:genItemTableFromPath("/library")
+        assert.is_true(hit_readable)
+        assert.are.equal(1, generated["/library"])
+    end)
+
+    it("passes through unreadable listings without caching them", function()
+        source_readable["/library"] = false
+        local chooser = setmetatable({ name = "filemanager" }, { __index = FileChooser })
+
+        local first, first_readable = chooser:genItemTableFromPath("/library")
+        assert.are.equal(1, #first)
+        assert.is_false(first_readable)
+        assert.are.equal("unreadable", chooser._zen_last_item_table_cache_result.cache)
+
+        run_scheduled()
+        local values = persisted_store.data.values
+        assert.is_nil(values and values["/library"])
+
+        local _, second_readable = chooser:genItemTableFromPath("/library")
+        assert.is_false(second_readable)
+        assert.are.equal(2, generated["/library"])
+
+        source_readable["/library"] = true
+        local _, third_readable = chooser:genItemTableFromPath("/library")
+        assert.is_true(third_readable)
+        assert.are.equal("miss", chooser._zen_last_item_table_cache_result.cache)
+        assert.are.equal(3, generated["/library"])
     end)
 end)

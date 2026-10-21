@@ -152,7 +152,8 @@ describe("filebrowser flat view compatibility patch", function()
         }
         local dirs, files = {}, {}
 
-        FileChooser.getPathList(chooser, "/library", nil, dirs, files)
+        -- KOReader 2026.10+ reads this as the folder's `readable` flag.
+        assert.is_true(FileChooser.getPathList(chooser, "/library", nil, dirs, files))
 
         assert.are.same({}, dirs)
         assert.are.same({ true }, files)
@@ -172,5 +173,26 @@ describe("filebrowser flat view compatibility patch", function()
         assert.are.equal(2, original_calls)
         assert.are.same({ "original-dir", "original-dir" }, dirs)
         assert.are.same({ "original-file", "original-file" }, files)
+    end)
+
+    it("reports flat listings as readable on KOReader without getPathList", function()
+        FileChooser = {
+            getList = function() return { "original-dir" }, { "original-file" }, false end,
+        }
+        ZenSpec.replace("ui/widget/filechooser", FileChooser)
+        ZenSpec.unload("modules/filebrowser/patches/browser_flat_view_compat")
+        require("modules/filebrowser/patches/browser_flat_view_compat")()
+        local chooser = {
+            show_dir = function() return true end,
+            show_file = function(_, name) return name:match("%.epub$") ~= nil end,
+        }
+
+        local dirs, files, readable = FileChooser.getList(chooser, "/library", nil)
+        assert.are.same({}, dirs)
+        assert.are.same({ true }, files)
+        assert.is_true(readable)
+
+        local _, _, outside_readable = FileChooser.getList(chooser, "/outside", nil)
+        assert.is_false(outside_readable)
     end)
 end)

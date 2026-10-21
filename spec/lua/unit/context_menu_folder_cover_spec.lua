@@ -240,8 +240,8 @@ describe("folder cover context-menu integration", function()
         local FileChooser = {
             show_filter = { status = { complete = true } },
             show_file = function() return true end,
-            getList = function()
-                return { empty, matching }, { "finished.epub" }
+            getList = function(self)
+                return { empty, matching }, { "finished.epub" }, self.stock_readable
             end,
         }
         local FileManager = {
@@ -262,6 +262,13 @@ describe("folder cover context-menu integration", function()
 
         dirs = FileChooser.getList({ name = "pathchooser" }, "/library", {})
         assert.are.same({ empty, matching }, dirs)
+
+        -- KOReader 2026.10+ returns `readable` as a third value.
+        for _i, flag in ipairs({ true, false }) do
+            local _, _, readable = FileChooser.getList(
+                { name = "filemanager", stock_readable = flag }, "/library", {})
+            assert.are.equal(flag, readable)
+        end
     end)
 
     it("keeps every path chooser traversable without changing its title bar", function()
@@ -284,7 +291,7 @@ describe("folder cover context-menu integration", function()
             }
         end
         function PathChooser:genItemTableFromPath()
-            return self.stock_items or {}
+            return self.stock_items or {}, self.stock_readable
         end
 
         local FileChooser = {
@@ -332,6 +339,18 @@ describe("folder cover context-menu integration", function()
         assert.are.equal(1, #items)
         chooser.stock_items = {}
         assert.are.equal(0, #PathChooser.genItemTableFromPath(chooser, "/"))
+
+        for _i, flag in ipairs({ true, false }) do
+            chooser.stock_readable = flag
+            chooser.stock_items = {}
+            local _, readable = PathChooser.genItemTableFromPath(chooser, "/library")
+            assert.are.equal(flag, readable)
+            chooser.stock_items = { { is_go_up = true, path = "/library/.." } }
+            _, readable = PathChooser.genItemTableFromPath(chooser, "/library")
+            assert.are.equal(flag, readable)
+            _, readable = PathChooser.genItemTableFromPath(chooser, "/")
+            assert.are.equal(flag, readable)
+        end
     end)
 
     it("keeps a configured cover reference aligned when its image moves", function()

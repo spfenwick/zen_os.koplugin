@@ -58,6 +58,8 @@ local function apply_browser_flat_view_compat()
                 table.insert(files, item)
             end,
         })
+        -- Newer KOReader expects getPathList to report whether the folder was readable.
+        return true
     end
 
     if type(FileChooser.getPathList) == "function" then
@@ -74,7 +76,7 @@ local function apply_browser_flat_view_compat()
             if flat_view_enabled(path) then
                 local dirs, files = {}, {}
                 scan_flat(self, path, collate, dirs, files)
-                return dirs, files
+                return dirs, files, true
             end
             return orig_getList(self, path, collate, ...)
         end

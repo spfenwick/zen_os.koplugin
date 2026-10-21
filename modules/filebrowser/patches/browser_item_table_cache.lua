@@ -809,7 +809,7 @@ local function apply_browser_item_table_cache()
             self._zen_last_item_table_cache_result = {
                 cache = "deferred", elapsed_ms = 0, items = 0,
             }
-            return {}
+            return {}, true
         end
 
         local started_at = now()
@@ -833,7 +833,7 @@ local function apply_browser_item_table_cache()
                     cache = "prepared", elapsed_ms = (now() - started_at) * 1000,
                     items = #prepared.table,
                 }
-                return prepared.table
+                return prepared.table, true
             end
         end
         local cached = get_cached(path, key)
@@ -847,7 +847,7 @@ local function apply_browser_item_table_cache()
                 cache = "memory_hit", elapsed_ms = (now() - started_at) * 1000,
                 items = #cached.table,
             }
-            return cached.table
+            return cached.table, true
         end
 
 
@@ -866,7 +866,7 @@ local function apply_browser_item_table_cache()
                 items = #cached.table,
                 signature_mode = cached.tree_signature_mode,
             }
-            return cached.table
+            return cached.table, true
         end
 
         local stale = shared_cache.values[path]
@@ -887,12 +887,23 @@ local function apply_browser_item_table_cache()
                 cache = "history_reorder", elapsed_ms = (now() - started_at) * 1000,
                 items = #stale.table,
             }
-            return stale.table
+            return stale.table, true
         end
 
-        local result = original_genItemTableFromPath(self, path)
+        -- Newer KOReader returns `readable` as a second value. Older versions
+        -- return nothing, so only an explicit false skips the cache.
+        local result, readable = original_genItemTableFromPath(self, path)
         if collate_mode == "access" then
             result = apply_history_order(self, result, collate, reverse)
+        end
+        if readable == false then
+            logger.measure("File list generated", (now() - started_at) * 1000,
+                "cache=unreadable", "path=", tostring(path), "items=", #result)
+            self._zen_last_item_table_cache_result = {
+                cache = "unreadable", elapsed_ms = (now() - started_at) * 1000,
+                items = #result,
+            }
+            return result, readable
         end
         local value = { key = key, stable_key = stable, table = result }
         put_cached(path, value)
@@ -904,7 +915,7 @@ local function apply_browser_item_table_cache()
             cache = "miss", elapsed_ms = (now() - started_at) * 1000,
             items = #result,
         }
-        return result
+        return result, readable
     end
 
     function FileChooser:_zen_warm_item_table(path)

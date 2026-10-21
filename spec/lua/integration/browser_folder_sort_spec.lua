@@ -3,10 +3,12 @@ describe("browser folder sort patch", function()
     local FileChooser
     local config
     local fixture
+    local source_readable
 
     before_each(function()
         config = { folder_sort = {} }
         fixture = SortFixtures.new()
+        source_readable = nil
         FileChooser = {
             collates = SortFixtures.collates(fixture.metadata),
             getCollate = function(self)
@@ -25,7 +27,7 @@ describe("browser folder sort patch", function()
                     for _i, item in ipairs(items) do collate.item_func(item, {}) end
                 end
                 table.sort(items, self:getSortingFunction(collate, self.global_reverse == true))
-                return items
+                return items, source_readable
             end,
         }
         ZenSpec.replace("ui/widget/filechooser", FileChooser)
@@ -159,5 +161,22 @@ describe("browser folder sort patch", function()
                     method .. " reverse=" .. tostring(reverse))
             end
         end
+    end)
+
+    it("passes KOReader's readable flag through overridden and plain folders", function()
+        local api = assert(_G.__ZEN_FOLDER_SORT)
+        api.set("/library/folder", "title", true)
+
+        for _i, flag in ipairs({ true, false }) do
+            source_readable = flag
+            local items, readable = FileChooser:genItemTableFromPath("/library/folder")
+            assert.are.same(SortFixtures.reversed(fixture.expected.title),
+                SortFixtures.paths_from_entries(items))
+            assert.are.equal(flag, readable)
+
+            local _, plain_readable = FileChooser:genItemTableFromPath("/library/other")
+            assert.are.equal(flag, plain_readable)
+        end
+        api.clear("/library/folder")
     end)
 end)
